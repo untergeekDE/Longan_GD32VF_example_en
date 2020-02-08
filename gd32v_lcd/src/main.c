@@ -98,25 +98,56 @@ int main(void)
                 LEDB_TOG;
             }
 
+
             /* Close the file */
             f_close(&fil);
         }
     }
     else
     {
-        LCD_ShowString(24,  0, (u8 *)("no card found!"), BLACK);
-        LCD_ShowString(24, 16, (u8 *)("no card found!"), BLUE);
-        LCD_ShowString(24, 32, (u8 *)("no card found!"), BRED);
-        LCD_ShowString(24, 48, (u8 *)("no card found!"), GBLUE);
-        LCD_ShowString(24, 64, (u8 *)("no card found!"), RED);
-        while (1)
+        while(1)
         {
+            BACK_COLOR=BLACK;
+            LCD_Clear(BACK_COLOR);
+            /*LCD_ShowStringX(0,0,(u8 *)"Test Font 0", GREEN, 0);
+            delay_1ms(500);
+            LCD_ShowStringX(0,8,(u8 *)"Test Font 1", RED, 1);
+            delay_1ms(500);
+            LCD_ShowStringX(0,24,(u8 *)"Test Font 2", BLUE, 2);
+            delay_1ms(500);
+            LCD_ShowStringX(0,48,(u8 *)"Test Font 3", WHITE, 3);*/
+            
+            LCD_Clear(BACK_COLOR);
+            LCD_ShowStringX(0,0,(u8 *)"Font4", GBLUE, 4);
+            delay_1ms(1500);
+            LCD_ShowStringX(0,32,(u8 *)"12345", WHITE,5);
+            
+            
+            /*
+            delay_1ms(1500);
+            for(u16 i=0;i<160;i++)
+            {
+                u16 x = (i *16) % LCD_W;
+                u16 y = ((i * 16) / LCD_W *16) % LCD_H; 
+                LCD_printChar(x,y,i+32,WHITE,2);
+            }
+
+            delay_1ms(1500);
+            for(u16 i=0;i<160;i++)
+            {
+                u16 x = (i *8) % LCD_W;
+                u16 y = ((i * 8) / LCD_W *16) % LCD_H; 
+                LCD_printChar(x,y,i+32,GBLUE,1);
+            }
+
+            */
             LEDR_TOG;
-            delay_1ms(200);
+            delay_1ms(1500);
             LEDG_TOG;
-            delay_1ms(200);
+            delay_1ms(1500);
             LEDB_TOG;
-            delay_1ms(200);
+            delay_1ms(1500);
+        
         }
     }
 }

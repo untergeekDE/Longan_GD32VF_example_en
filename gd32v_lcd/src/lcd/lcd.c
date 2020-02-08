@@ -1,13 +1,56 @@
+/**************************************************************************
+ * LCD Display library functions										*
+ * Code CC-BY untergeekDE
+ * 
+ * Based on the LCD display demo code by Sipeed under Apache 2.0 License
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Reuses parts of Deloarts OLED library. 
+ * 
+ * OK team, what have we got here? 
+ * This is a backlit 160x80px LC color display. 
+ * Individual pixels are 16-bit RGB values (0brrrrrggggggbbbbb - 
+ * see the color constants in the lcd.h file).
+ * Data is written en bloc, by sending the display a range of pixels to fill,
+ * defined by x and y offset, width, and height,  
+ * and then banging the 16-bit values for the pixels to the SPI bus. 
+ * Data is written line by line, in descending order. 
+ * (0,0) is in the upper left corner, 
+ * (159,79) in the lower right corner.
+ * 
+ * The original Sipeed code is plain and simple:
+ * - Init for the communication 
+ * - Routines to write data to the SPI bus: single pixel, range...
+ * - Crude but fast routines to write lines and circles, filled and empty rectangles.
+ * - A routine to print 8x16px ASCII characters to any position.
+ * - A routine to print 16x16 or 32x32 Chinese characters to any position
+ * - A logo display routine.  
+ * - Routines to print character strings, and numbers. 
+ * 
+ * So this is what I took from my old code: 
+ * - A routine to print 8x8 characters from ye olde CP437/MSDOS charset, 
+ *   in fontsize=1 (8x8), 2 (16x16), 3 (24x24), using the Scale2x and Scale3x algo
+ * - A sorta BITBLT routine
+ * - I will make the string and numbers routines use my character print routine. 
+ * 
+ * Just for the record: 
+ * - The LCD_showChar routine by Sipeed gives you 5 lines of 20 characters.
+ * - My LCD_printChar routine gives you 10 lines of 20 very small characters,
+ *   5x10 middle-sized ones, or 3 lines of 6 *large* characters.
+ * 
+ * *******************************************************************************/
+
 #include "lcd/lcd.h"
-#include "lcd/oledfont.h"
-#include "lcd/bmp.h"
-u16 BACK_COLOR;   //背景色
+#include <lcd/oledfont.h>
+#include <lcd/8x8_vertikal_LSB_2.h>		//The CP437 font I ripped
+#include <lcd/bmp.h>
+u16 BACK_COLOR;   //Background color
 
 
 /******************************************************************************
-      函数说明：LCD串行数据写入函数
-      入口数据：dat  要写入的串行数据
-      返回值：  无
+       Function description: LCD serial data write function
+       Entry data: one byte to be written via serial 
+       Return value: None
 ******************************************************************************/
 void LCD_Writ_Bus(u8 dat) 
 {
@@ -41,99 +84,100 @@ void LCD_Writ_Bus(u8 dat)
 
 
 /******************************************************************************
-      函数说明：LCD写入数据
-      入口数据：dat 写入的数据
-      返回值：  无
+       Function description: LCD write data
+       Entry data: unsigned byte value to write
+       Return value: None
 ******************************************************************************/
 void LCD_WR_DATA8(u8 dat)
 {
-	OLED_DC_Set();//写数据
-	LCD_Writ_Bus(dat);
+	OLED_DC_Set();		// Set to "Write data"
+	LCD_Writ_Bus(dat);	// Serial write the byte
 }
 
 
 /******************************************************************************
-      函数说明：LCD写入数据
-      入口数据：dat 写入的数据
-      返回值：  无
+Function description: LCD write data
+       Entry data: unsigned integer word to write
+       Return value: None
 ******************************************************************************/
 void LCD_WR_DATA(u16 dat)
 {
-	OLED_DC_Set();//写数据
-	LCD_Writ_Bus(dat>>8);
-	LCD_Writ_Bus(dat);
+	OLED_DC_Set();			//Set to "Write data"
+	LCD_Writ_Bus(dat>>8);	//Serial write High byte
+	LCD_Writ_Bus(dat);		//Serial write Low byte
 }
 
 
 /******************************************************************************
-      函数说明：LCD写入命令
-      入口数据：dat 写入的命令
-      返回值：  无
+       Function description: LCD write command
+       Entry data: unsigned command byte
+       Return value: None
 ******************************************************************************/
 void LCD_WR_REG(u8 dat)
 {
-	OLED_DC_Clr();//写命令
-	LCD_Writ_Bus(dat);
+	OLED_DC_Clr();		//Set to "Write command"
+	LCD_Writ_Bus(dat);	// Send command byte via serial
 }
 
 
-/******************************************************************************
-      函数说明：设置起始和结束地址
-      入口数据：x1,x2 设置列的起始和结束地址
-                y1,y2 设置行的起始和结束地址
-      返回值：  无
-******************************************************************************/
+/************************************************* *****************************
+       Function description: Set start and end addresses for write
+
+
+       Entry data: x1, x2 set the start and end column
+                 y1, y2 set the start and end line
+       Return value: None
+************************************************** ****************************/
 void LCD_Address_Set(u16 x1,u16 y1,u16 x2,u16 y2)
 {
 	if(USE_HORIZONTAL==0)
 	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1+26);
+		LCD_WR_REG(0x2a);		//Column address settings
+		LCD_WR_DATA(x1+26);		//x1 - x of 
 		LCD_WR_DATA(x2+26);
-		LCD_WR_REG(0x2b);//行地址设置
+		LCD_WR_REG(0x2b);		//Row address setting
 		LCD_WR_DATA(y1+1);
 		LCD_WR_DATA(y2+1);
-		LCD_WR_REG(0x2c);//储存器写
+		LCD_WR_REG(0x2c);		//Memory Write
 	}
 	else if(USE_HORIZONTAL==1)
 	{
-		LCD_WR_REG(0x2a);//列地址设置
+		LCD_WR_REG(0x2a);		//Column address settings
 		LCD_WR_DATA(x1+26);
 		LCD_WR_DATA(x2+26);
-		LCD_WR_REG(0x2b);//行地址设置
+		LCD_WR_REG(0x2b);		//Row address setting
 		LCD_WR_DATA(y1+1);
 		LCD_WR_DATA(y2+1);
-		LCD_WR_REG(0x2c);//储存器写
+		LCD_WR_REG(0x2c);		//Memory write
 	}
-	else if(USE_HORIZONTAL==2)
+	else if(USE_HORIZONTAL==2)	//IT'S MEEEE!!! THIS IS WHAT WE ARE USING!!!!
 	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1+1);
+		LCD_WR_REG(0x2a);		//Column address settings
+		LCD_WR_DATA(x1+1);		
 		LCD_WR_DATA(x2+1);
-		LCD_WR_REG(0x2b);//行地址设置
+		LCD_WR_REG(0x2b);		//Row address setting
 		LCD_WR_DATA(y1+26);
 		LCD_WR_DATA(y2+26);
-		LCD_WR_REG(0x2c);//储存器写
+		LCD_WR_REG(0x2c);		//Memory write
 	}
 	else
 	{
-		LCD_WR_REG(0x2a);//列地址设置
+		LCD_WR_REG(0x2a);		//Column address settings
 		LCD_WR_DATA(x1+1);
 		LCD_WR_DATA(x2+1);
-		LCD_WR_REG(0x2b);//行地址设置
+		LCD_WR_REG(0x2b);		//Row address setting
 		LCD_WR_DATA(y1+26);
 		LCD_WR_DATA(y2+26);
-		LCD_WR_REG(0x2c);//储存器写
+		LCD_WR_REG(0x2c);		//Memory write
 	}
 }
 
+/************************************************* *****************************
+       Function description: Configure the DMA or SPI peripheral
+       Entry data: none
+       Return value: None
+************************************************** ****************************/
 #if SPI0_CFG == 2
-/*!
-    \brief      configure the DMA peripheral
-    \param[in]  none
-    \param[out] none
-    \retval     none
-*/
 void dma_config(void)
 {
 	dma_parameter_struct dma_init_struct;
@@ -159,12 +203,11 @@ void dma_config(void)
 #endif
 
 #if SPI0_CFG == 1
-/*!
-    \brief      configure the SPI peripheral
-    \param[in]  none
-    \param[out] none
-    \retval     none
-*/
+/************************************************* *****************************
+       Function description: Configure the DMA or SPI peripheral
+       Entry data: none
+       Return value: None
+************************************************** ****************************/
 void spi_config(void)
 {
     spi_parameter_struct spi_init_struct;
@@ -188,14 +231,13 @@ void spi_config(void)
 #endif
 
 /******************************************************************************
-      函数说明：LCD初始化函数
-      入口数据：无
-      返回值：  无
+      LCD initialisation. Gets nothing, returns nothing. 
 ******************************************************************************/
 void Lcd_Init(void)
 {
 	rcu_periph_clock_enable(RCU_GPIOA);
 	rcu_periph_clock_enable(RCU_GPIOB);
+
 
 #if SPI0_CFG == 1
  	rcu_periph_clock_enable(RCU_AF);
@@ -337,9 +379,7 @@ void Lcd_Init(void)
 }
 
 /******************************************************************************
-      函数说明：LCD清屏函数
-      入口数据：无
-      返回值：  无
+ * 		Erase to 16-bit Color value, pixel by pixel. (Duh, slow, that.)
 ******************************************************************************/
 void LCD_Clear(u16 Color)
 {
@@ -355,56 +395,22 @@ void LCD_Clear(u16 Color)
 }
 
 
-/******************************************************************************
-      函数说明：LCD显示汉字
-      入口数据：x,y   起始坐标
-                index 汉字的序号
-                size  字号
-      返回值：  无
-******************************************************************************/
-void LCD_ShowChinese(u16 x,u16 y,u8 index,u8 size,u16 color)	
-{  
-	u8 i,j;
-	u8 *temp,size1;
-	if(size==16){temp=Hzk16;}//选择字号
-	if(size==32){temp=Hzk32;}
-  LCD_Address_Set(x,y,x+size-1,y+size-1); //设置一个汉字的区域
-  size1=size*size/8;//一个汉字所占的字节
-	temp+=index*size1;//写入的起始位置
-	for(j=0;j<size1;j++)
-	{
-		for(i=0;i<8;i++)
-		{
-		 	if((*temp&(1<<i))!=0)//从数据的低位开始读
-			{
-				LCD_WR_DATA(color);//点亮
-			}
-			else
-			{
-				LCD_WR_DATA(BACK_COLOR);//不点亮
-			}
-		}
-		temp++;
-	 }
-}
-
 
 /******************************************************************************
-      函数说明：LCD显示汉字
-      入口数据：x,y   起始坐标
-      返回值：  无
+Function: Draw a colored pixel
+	Needs: x and y position, 16-bit color
 ******************************************************************************/
 void LCD_DrawPoint(u16 x,u16 y,u16 color)
 {
-	LCD_Address_Set(x,y,x,y);//设置光标位置 
+	LCD_Address_Set(x,y,x,y);	//Frame to write to 
 	LCD_WR_DATA(color);
 } 
 
 
 /******************************************************************************
-      函数说明：LCD画一个大的点
-      入口数据：x,y   起始坐标
-      返回值：  无
+Function description: Draw a 3x3px block in color 
+       Entry data: x, y starting coordinates
+       Return value: None
 ******************************************************************************/
 void LCD_DrawPoint_big(u16 x,u16 y,u16 color)
 {
@@ -413,36 +419,36 @@ void LCD_DrawPoint_big(u16 x,u16 y,u16 color)
 
 
 /******************************************************************************
-      函数说明：在指定区域填充颜色
-      入口数据：xsta,ysta   起始坐标
-                xend,yend   终止坐标
-      返回值：  无
+Function description: fill rectangle with specified color
+       Entry data: xsta, ysta starting coordinates
+                 xend, yend termination coordinates
+       Return value: None
 ******************************************************************************/
 void LCD_Fill(u16 xsta,u16 ysta,u16 xend,u16 yend,u16 color)
 {          
 	u16 i,j; 
-	LCD_Address_Set(xsta,ysta,xend,yend);      //设置光标位置 
+	LCD_Address_Set(xsta,ysta,xend,yend);      // Frame to fill 
 	for(i=ysta;i<=yend;i++)
 	{													   	 	
-		for(j=xsta;j<=xend;j++)LCD_WR_DATA(color);//设置光标位置 	    
+		for(j=xsta;j<=xend;j++)LCD_WR_DATA(color);//Send Data 	    
 	} 					  	    
 }
 
 
 /******************************************************************************
-      函数说明：画线
-      入口数据：x1,y1   起始坐标
-                x2,y2   终止坐标
-      返回值：  无
+Function description: draw line in color color
+       Entry data: x1, y1 starting coordinates
+                 x2, y2 end coordinates
+       Return value: None
 ******************************************************************************/
 void LCD_DrawLine(u16 x1,u16 y1,u16 x2,u16 y2,u16 color)
 {
 	u16 t; 
 	int xerr=0,yerr=0,delta_x,delta_y,distance;
 	int incx,incy,uRow,uCol;
-	delta_x=x2-x1; //计算坐标增量 
+	delta_x=x2-x1; //Number of horizontal and vertical steps
 	delta_y=y2-y1;
-	uRow=x1;//画线起点坐标
+	uRow=x1;//Start position
 	uCol=y1;
 	if(delta_x>0)incx=1; //设置单步方向 
 	else if (delta_x==0)incx=0;//垂直线 
@@ -472,10 +478,7 @@ void LCD_DrawLine(u16 x1,u16 y1,u16 x2,u16 y2,u16 color)
 
 
 /******************************************************************************
-      函数说明：画矩形
-      入口数据：x1,y1   起始坐标
-                x2,y2   终止坐标
-      返回值：  无
+ * 	Draw an empty rectangle
 ******************************************************************************/
 void LCD_DrawRectangle(u16 x1, u16 y1, u16 x2, u16 y2,u16 color)
 {
@@ -485,18 +488,18 @@ void LCD_DrawRectangle(u16 x1, u16 y1, u16 x2, u16 y2,u16 color)
 	LCD_DrawLine(x2,y1,x2,y2,color);
 }
 
-
 /******************************************************************************
-      函数说明：画圆
-      入口数据：x0,y0   圆心坐标
-                r       半径
-      返回值：  无
+Function description: fast circle draw
+       Entry data: x0, y0 center coordinates
+                 r radius
+       Return value: None
 ******************************************************************************/
 void Draw_Circle(u16 x0,u16 y0,u8 r,u16 color)
 {
 	int a,b;
 	// int di;
-	a=0;b=r;	  
+	a=0;b=r;	
+	// Write eight segments of circle at once  
 	while(a<=b)
 	{
 		LCD_DrawPoint(x0-b,y0-a,color);             //3           
@@ -507,8 +510,8 @@ void Draw_Circle(u16 x0,u16 y0,u8 r,u16 color)
 		LCD_DrawPoint(x0+a,y0-b,color);             //5
 		LCD_DrawPoint(x0+a,y0+b,color);             //6 
 		LCD_DrawPoint(x0-b,y0+a,color);             //7
-		a++;
-		if((a*a+b*b)>(r*r))//判断要画的点是否过远
+		a++;										// Increase x offset
+		if((a*a+b*b)>(r*r))							// If radius reached, decrease y offset
 		{
 			b--;
 		}
@@ -516,74 +519,40 @@ void Draw_Circle(u16 x0,u16 y0,u8 r,u16 color)
 }
 
 
-/******************************************************************************
-      函数说明：显示字符
-      入口数据：x,y    起点坐标
-                num    要显示的字符
-                mode   1叠加方式  0非叠加方式
-      返回值：  无
-******************************************************************************/
-void LCD_ShowChar(u16 x,u16 y,u8 num,u8 mode,u16 color)
-{
-    u8 temp;
-    u8 pos,t;
-	  u16 x0=x;    
-    if(x>LCD_W-16||y>LCD_H-16)return;	    //设置窗口		   
-	num=num-' ';//得到偏移后的值
-	LCD_Address_Set(x,y,x+8-1,y+16-1);      //设置光标位置 
-	if(!mode) //非叠加方式
-	{
-		for(pos=0;pos<16;pos++)
-		{ 
-			temp=asc2_1608[(u16)num*16+pos];		 //调用1608字体
-			for(t=0;t<8;t++)
-		    {                 
-		        if(temp&0x01)LCD_WR_DATA(color);
-				else LCD_WR_DATA(BACK_COLOR);
-				temp>>=1;
-				x++;
-		    }
-			x=x0;
-			y++;
-		}	
-	}else//叠加方式
-	{
-		for(pos=0;pos<16;pos++)
-		{
-		    temp=asc2_1608[(u16)num*16+pos];		 //调用1608字体
-			for(t=0;t<8;t++)
-		    {                 
-		        if(temp&0x01)LCD_DrawPoint(x+t,y+pos,color);//画一个点     
-		        temp>>=1; 
-		    }
-		}
-	}   	   	 	  
-}
 
 
 /******************************************************************************
-      函数说明：显示字符串
-      入口数据：x,y    起点坐标
-                *p     字符串起始地址
-      返回值：  无
+Function description: display string (no wrapping)
+       Entry data: x, y starting point coordinates
+                 * p string start address
+       Return value: None
 ******************************************************************************/
 void LCD_ShowString(u16 x,u16 y,const u8 *p,u16 color)
 {         
-    while(*p!='\0')
+	LCD_ShowStringX(x,y,p,color,SMALL);
+}
+
+void LCD_ShowStringX(u16 x,u16 y,const u8 *p,u16 color, u8 fontsize)
+{         
+	while(*p!='\0')
     {       
-        if(x>LCD_W-16){x=0;y+=16;}
-        if(y>LCD_H-16){y=x=0;LCD_Clear(RED);}
-        LCD_ShowChar(x,y,*p,0,color);
+        LCD_printChar(x,y,*p,color,fontsize);
         x+=8;
+		if (fontsize>1) x+=8;
+		if (fontsize>3) x+=8;
+		if (x > LCD_W)
+		{
+			x -= LCD_W;
+			y += 8+(fontsize*8);
+		}
         p++;
     }  
 }
 
-
 /******************************************************************************
-      函数说明：显示数字
-      入口数据：m底数，n指数
-      返回值：  无
+Function description: nth power of m
+       Entry data: base m, n exponent
+       Return value: m^n
 ******************************************************************************/
 u32 mypow(u8 m,u8 n)
 {
@@ -594,16 +563,22 @@ u32 mypow(u8 m,u8 n)
 
 
 /******************************************************************************
-      函数说明：显示数字
-      入口数据：x,y    起点坐标
-                num    要显示的数字
-                len    要显示的数字个数
-      返回值：  无
+Function description: display numbers
+       Entry data: x, y starting point coordinates
+                 num unsigned int number to display
+                 len number of digits to display
+       Return value: None
 ******************************************************************************/
 void LCD_ShowNum(u16 x,u16 y,u16 num,u8 len,u16 color)
 {         	
+	LCD_ShowNumX(x,y,num,len,color,SMALL);
+} 
+
+void LCD_ShowNumX(u16 x,u16 y,u16 num,u8 len,u16 color, u8 fontsize)
+{         	
 	u8 t,temp;
 	u8 enshow=0;
+	fontsize++;
 	for(t=0;t<len;t++)
 	{
 		temp=(num/mypow(10,len-t-1))%10;
@@ -611,24 +586,30 @@ void LCD_ShowNum(u16 x,u16 y,u16 num,u8 len,u16 color)
 		{
 			if(temp==0)
 			{
-				LCD_ShowChar(x+8*t,y,' ',0,color);
+				LCD_printChar(x+8*fontsize*t,y,' ',color,fontsize);
 				continue;
 			}else enshow=1; 
 		 	 
 		}
-	 	LCD_ShowChar(x+8*t,y,temp+48,0,color); 
+	 	LCD_ShowChar(x+8*fontsize*t,y,temp+48,0,color); 
 	}
 } 
 
 
 /******************************************************************************
-      函数说明：显示小数
-      入口数据：x,y    起点坐标
-                num    要显示的小数
-                len    要显示的数字个数
-      返回值：  无
+Function description: display decimal
+       Entry data: x, y starting point coordinates
+                 num floating point decimal to display
+                 len number of digits to display
+       Return value: None
 ******************************************************************************/
+
 void LCD_ShowNum1(u16 x,u16 y,float num,u8 len,u16 color)
+{
+	LCD_ShowNum1X(x,y,num,len,color,SMALL);
+}
+
+void LCD_ShowNum1X(u16 x,u16 y,float num,u8 len,u16 color,u8 fontsize)
 {         	
 	u8 t,temp;
 	// u8 enshow=0;
@@ -639,19 +620,19 @@ void LCD_ShowNum1(u16 x,u16 y,float num,u8 len,u16 color)
 		temp=(num1/mypow(10,len-t-1))%10;
 		if(t==(len-2))
 		{
-			LCD_ShowChar(x+8*(len-2),y,'.',0,color);
+			LCD_printChar(x+8*fontsize*(len-2),y,'.',color,fontsize);
 			t++;
 			len+=1;
 		}
-	 	LCD_ShowChar(x+8*t,y,temp+48,0,color);
+	 	LCD_printChar(x+8*fontsize*t,y,temp+48,color,fontsize);
 	}
 }
 
 
 /******************************************************************************
-      函数说明：显示40x40图片
-      入口数据：x,y    起点坐标
-      返回值：  无
+Function description: display 40x40 picture
+       Entry data: x, y starting point coordinates
+       Return value: None
 ******************************************************************************/
 void LCD_ShowPicture(u16 x1,u16 y1,u16 x2,u16 y2)
 {
@@ -674,3 +655,346 @@ void LCD_ShowLogo(void)
 	}			
 }
 
+
+
+/* #####################################################################################################################
+   ##### DRAW BITMAP ###################################################################################################
+   #####################################################################################################################
+* Copies a 16bit-per-pixel bitmap. 
+* Careful, Laddie: This routine does not check for bounds. It just takes a pointer and starts on copying
+* as long as X and Y have not been reached; don't use it on memory that does not belong to you. Srsly. */
+
+void LCD_drawBitmap(u16 *b, u8 x1, u8 y1, u8 Width, u8 Height)
+{
+	u8 x2 = x1+Width-1;
+	u8 y2 = y1+Height-1;
+	u16 i;
+	if (x2 >= LCD_W) return; // Do nothing if out of bounds.
+	if (y2 >= LCD_H) return; // Do nothing if out of bounds.	 
+	// TODO: Write a clipping routine. 
+
+	LCD_Address_Set(x1,y1,x2,y2); 
+	for(i=0;i<Width*Height;i++)
+	{						 
+		LCD_WR_DATA(*b++); 	    
+	} 	
+}
+
+
+/******************************************************************************
+Function description: display characters (8x16px ASCII font)
+       Entry data: x, y starting point coordinates
+                 num characters to display
+                 mode: 1 superimpose 0 overwrite bg 
+       Return value: None
+******************************************************************************/
+void LCD_ShowChar(u16 x,u16 y,u8 num,u8 mode,u16 color)
+{
+    u8 temp;
+    u8 pos,t;
+	  u16 x0=x;    
+    if(x>LCD_W-16||y>LCD_H-16)return;	    // Setting window: Out-of-bounds chars ignored	   
+	num=num-' ';							// ASCII offset: Don't print anything below 32 
+	LCD_Address_Set(x,y,x+8-1,y+16-1);      // Set cursor position
+	if(!mode) 								// Overwrite
+	{
+		for(pos=0;pos<16;pos++)
+		{ 
+			temp=asc2_1608[(u16)num*16+pos];		 //Copy from 1608 font
+			for(t=0;t<8;t++)
+		    {                 
+		        if(temp&0x01)LCD_WR_DATA(color);
+				else LCD_WR_DATA(BACK_COLOR);
+				temp>>=1;
+				x++;
+		    }
+			x=x0;
+			y++;
+		}	
+	}else											// Transparent
+	{
+		for(pos=0;pos<16;pos++)
+		{
+		    temp=asc2_1608[(u16)num*16+pos];		 //Call 1608 font
+			for(t=0;t<8;t++)
+		    {                 
+		        if(temp&0x01)LCD_DrawPoint(x+t,y+pos,color);//Plot pixel in color    
+		        temp>>=1; 
+		    }
+		}
+	}   	   	 	  
+}
+
+
+// My repossessed OLED_I2C_128x64 print routine.
+// Modular rewrite. As everything is pixels here anyway, 
+// we might just as well use pixel arrays and copy those. 
+
+/********************************************************
+ * Function: u16 dampenColor(color)
+ * Calculates a color value with half the brightness. 
+ * more of a macro
+ * 
+ * Colors are 16-bit values of the form 
+ * RRRRRGGGGGGBBBBBb
+ ********************************************************/
+u16 dampenColor(u16 color)
+{
+	return ((color & 0xF800) >> 1) | ((color & 0x07E0) >> 1) | ((color & 0x001F) >> 1);
+}
+
+/********************************************************
+ * Function: scale2x
+ * Input: pointer to an array of unsigned integers, x and y dimensions
+ * Needs a buffer at least 2x the size
+ * The image to double 
+ * Returns the array filled with a bitmap of the doubled size
+ * Uses a modified version of the scale2x pixel doubler 
+*********************************************************/
+void scale2x(u16 b[X_BUF][Y_BUF], u8 x, u8 y)
+{	
+	// If the bitmap array is smaller than the dimensions, exit
+	if (X_BUF < x*2 || Y_BUF < y*2) return;
+	// Start filling from lower right corner, 
+	// which is empty right now, and then start  
+	// 1101 -> 10100010
+	for (int yy=y-1;yy>=0;yy--)
+	{
+		for(int xx=x-1;xx>=0;xx--)
+		{
+			// scale2x magic borrowed from scale2x.it
+			// Pixel names in source matrix: 
+			//  A B C
+			//  D E F
+			//  G H I 
+			//
+			u16 B = (yy>0) ? b[xx][yy-1] : 0; //if out of bounds, set 0
+			u16 H = (yy<y-1) ? b[xx][yy+1] : 0;
+			u16 D = (xx>0) ? b[xx-1][yy] : 0;
+			u16 F = (xx<x-1) ? b[xx+1][yy] : 0;
+			
+			if (B != H && D != F) {
+				b[2*xx][2*yy] = D == B ? D : b[xx][yy];
+				b[2*xx+1][2*yy] = B == F ? F : b[xx][yy];
+				b[2*xx][2*yy+1] = D == H ? D : b[xx][yy];
+				b[2*xx+1][2*yy+1] = H == F ? F : b[xx][yy];
+			} else {
+				u16 E = b[xx][yy];
+				b[2*xx][2*yy] = E;
+				b[2*xx][2*yy+1] = E;
+				b[2*xx+1][2*yy] = E;
+				b[2*xx+1][2*yy+1] = E;
+			}	
+		}
+	}
+}
+
+void scale3x(u16 b[X_BUF][Y_BUF], u8 x, u8 y)
+{	
+	// If the bitmap array is smaller than the dimensions, exit
+	if (X_BUF < x*3 || Y_BUF < y*3) return;
+	// Start filling from lower right corner, 
+	// which is empty right now, and then start  
+	// 1101 -> 10100010
+	for (int yy=y-1;yy>=0;yy--)
+	{
+		for(int xx=x-1;xx>=0;xx--)
+		{
+			u16 A = (yy>0 && xx> 0) ? b[xx-1][yy-1] : 0;
+			u16 B = (yy>0) ? b[xx][yy-1] : 0; //if out of bounds, set 0
+			u16 C = (yy>0 && xx<x-1) ? b[xx+1][yy-1] : 0 ;
+			u16 D = (xx>0) ? b[xx-1][yy] : 0;
+			u16 E = b[xx][yy];
+			u16 F = (xx<x-1) ? b[xx+1][yy] : 0;
+			u16 G = (xx>0 && yy<y-1) ? b[xx-1][yy+1] : 0;
+			u16 H = (yy<y-1) ? b[xx][yy+1] : 0;
+			u16 I = (xx<x-1 && yy<y-1) ? b[xx+1][yy+1] : 0;
+			
+
+			if (B != H && D != F) {
+				b[xx*3][yy*3] = D == B ? D : E;
+				b[xx*3+1][yy*3] = (D == B && E != C) || (B == F && E != A) ? B : E;
+				b[xx*3+2][yy*3] = B == F ? F : E;
+				b[xx*3][yy*3+1] = (D == B && E != G) || (D == H && E != A) ? D : E;
+				b[xx*3+1][yy*3+1] = E;
+				b[xx*3+2][yy*3+1] = (B == F && E != I) || (H == F && E != C) ? F : E;
+				b[xx*3][yy*3+2] = D == H ? D : E;
+				b[xx*3+1][yy*3+2] = (D == H && E != I) || (H == F && E != G) ? H : E;
+				b[xx*3+2][yy*3+2] = H == F ? F : E;
+			} else {
+				b[xx*3][yy*3] = E;
+				b[xx*3+1][yy*3] = E;
+				b[xx*3+2][yy*3] = E;
+				b[xx*3][yy*3+1] = E;
+				b[xx*3+1][yy*3+1] = E;
+				b[xx*3+2][yy*3+1] = E;
+				b[xx*3][yy*3+2] = E;
+				b[xx*3+1][yy*3+2] = E;
+				b[xx*3+2][yy*3+2] = E;
+			}
+		}
+	}
+}
+
+
+/***************************************************************
+ * function LCD_printChar
+ * Prints character at x,y location in one of 4 font sizes: 
+ * 0 = 8x8 font
+ * 1 = 8x16 default font
+ * 2 = 8x8 font doubled to 16x16
+ * 3 = 8x16 font doubled to 16x32
+ * IMPLEMENT LATER
+ * 4 = 8x8 font tripled to 24x24
+ * 5 = 8x16 font tripled to 24x48
+ * *************************************************************/
+
+void LCD_printChar(u16 x,u16 y,u8 c,u16 color,u8 fontsize)
+{
+	u16 buf[X_BUF][Y_BUF];
+	u8 xx,yy;
+	// Maximal bitmap size
+	// DELAY TO DEBUG
+
+// ###################################
+//  fontsize=0 ==> Standard 8x8 chars
+//  (Only do if not out of bounds)
+// ###################################
+if (fontsize == 0 && (x<LCD_W-7 && y<LCD_H-7))
+	{	
+		// Copy font to pixels
+		LCD_Address_Set(x,y,x+7,y+7);
+		// Step through the columns now. 
+		for(yy = 0; yy < 8; yy++)
+		{
+			for(xx=0; xx < 8; xx++)
+			{
+				// LSB is on top; mask. 
+				buf[xx][yy] = (((1 << yy) & BasicFont[c][xx]) != 0) ? color : BACK_COLOR;
+				LCD_WR_DATA(buf[xx][yy]);
+			}
+		}
+	}
+
+// ###################################
+//  fontsize=2 ==> Standard 8x8 chars
+// scaled by scale2x
+//  (Only do if not out of bounds)
+// ###################################
+if (fontsize == 2 && (x<LCD_W-15 && y<LCD_H-15))
+	{	
+		// Copy font to pixels
+		// Step through the columns now. 
+		for(yy = 0; yy < 8; yy++)
+		{
+			for(xx=0; xx < 8; xx++)
+			{
+				// LSB is on top; mask. 
+				buf[xx][yy] = (((1 << yy) & BasicFont[c][xx]) != 0) ? color : BACK_COLOR;
+			}
+		}
+		scale2x(buf,8,8);
+		LCD_Address_Set(x,y,x+15,y+15);
+		for (u8 yy=0;yy<16;yy++)
+			for(u8 xx=0;xx<16;xx++)
+				LCD_WR_DATA(buf[xx][yy]);
+	}
+
+// ###################################
+//  fontsize=4 ==> Standard 8x8 chars
+// scaled by scale3x
+//  (Only do if not out of bounds)
+// ###################################
+if (fontsize == 4 && (x<LCD_W-23 && y<LCD_H-23))
+	{	
+		// Copy font to pixels
+		// Step through the columns now. 
+		for(yy = 0; yy < 8; yy++)
+		{
+			for(xx=0; xx < 8; xx++)
+			{
+				// LSB is on top; mask. 
+				buf[xx][yy] = (((1 << yy) & BasicFont[c][xx]) != 0) ? color : BACK_COLOR;
+			}
+		}
+		scale3x(buf,8,8);
+		LCD_Address_Set(x,y,x+23,y+23);
+		for (u8 yy=0;yy<24;yy++)
+			for(u8 xx=0;xx<24;xx++)
+				LCD_WR_DATA(buf[xx][yy]);
+	}
+
+
+// ###################################
+//  fontsize==1 ==> use default font
+//  (repossessing parts of the LCD_ShowChar routine here)
+// ###################################
+	if (fontsize == 1 && (x<LCD_W-7 && y<LCD_H-15))
+	{
+		// Copy default font to buffer. 
+		c -= ' ';
+		for(u16 yy=0;yy<16;yy++)
+		{ 
+			u16 temp=asc2_1608[(u16)c*16+yy];		 //Copy from 1608 font
+			for(u16 xx=0;xx<8;xx++)
+			{                 
+				buf[xx][yy] = (temp&0x01) ? color : BACK_COLOR;
+				temp>>=1;
+			}
+		}	
+		//
+		LCD_Address_Set(x,y,x+7,y+15);
+		for (u8 yy=0;yy<16;yy++)
+			for(u8 xx=0;xx<8;xx++)
+				LCD_WR_DATA(buf[xx][yy]);
+	} // end fontsize==1
+
+// ###################################
+//  fontsize==3 ==> use default font and scale2x it
+//  (repossessing parts of the LCD_ShowChar routine here)
+// ###################################
+	if (fontsize == 3 && (x<LCD_W-15 && y<LCD_H-31))
+	{
+		// Copy default font to buffer. 
+		c -= ' ';
+		for(u16 yy=0;yy<16;yy++)
+		{ 
+			u16 temp=asc2_1608[(u16)c*16+yy];		 //Copy from 1608 font
+			for(u16 xx=0;xx<8;xx++)
+			{                 
+				buf[xx][yy] = (temp&0x01) ? color : BACK_COLOR;
+				temp>>=1;
+			}
+		}	
+		//
+		scale2x(buf,8,16);
+		LCD_Address_Set(x,y,x+15,y+31);
+		for (u8 yy=0;yy<32;yy++)
+			for(u8 xx=0;xx<16;xx++)
+				LCD_WR_DATA(buf[xx][yy]);
+	} // end fontsize==3
+// ###################################
+//  fontsize==5 ==> use default font and scale3x it
+//  (repossessing parts of the LCD_ShowChar routine here)
+// ###################################
+	if (fontsize == 5 && (x<LCD_W-23 && y<LCD_H-47))
+	{
+		// Copy default font to buffer. 
+		c -= ' ';
+		for(u16 yy=0;yy<16;yy++)
+		{ 
+			u16 temp=asc2_1608[(u16)c*16+yy];		 //Copy from 1608 font
+			for(u16 xx=0;xx<8;xx++)
+			{                 
+				buf[xx][yy] = (temp&0x01) ? color : BACK_COLOR;
+				temp>>=1;
+			}
+		}	
+		//
+		scale3x(buf,8,16);
+		LCD_Address_Set(x,y,x+23,y+47);
+		for (u8 yy=0;yy<48;yy++)
+			for(u8 xx=0;xx<24;xx++)
+				LCD_WR_DATA(buf[xx][yy]);
+	} // end fontsize==5
+}

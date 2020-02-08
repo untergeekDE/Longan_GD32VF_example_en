@@ -1,14 +1,16 @@
 #ifndef __LCD_H
 #define __LCD_H		
 
-#include "systick.h"
+#include <systick.h>
 #include "stdlib.h"	
 #include "gd32vf103_gpio.h"
 
-#define USE_HORIZONTAL 2  //设置横屏或者竖屏显示 0或1为竖屏 2或3为横屏
-#define HAS_BLK_CNTL    0
+#define USE_HORIZONTAL 2    // Set horizontal or vertical screen display 
+                            // 0 or 1 for Portrait Mode
+                            // 2 or 3 for Landscape Mode
+#define HAS_BLK_CNTL    0   // No Block Mode with this display
 
-#if USE_HORIZONTAL==0||USE_HORIZONTAL==1
+#if USE_HORIZONTAL==0||USE_HORIZONTAL==1    //
 #define LCD_W 80
 #define LCD_H 160
 #else
@@ -33,7 +35,7 @@ typedef unsigned long u32;
 
 #define FRAME_SIZE  25600
 
-//-----------------OLED端口定义---------------- 
+//-----------------OLED Port definition---------------- 
 #if SPI0_CFG == 1
 #define OLED_SCLK_Clr() 
 #define OLED_SCLK_Set() 
@@ -81,8 +83,8 @@ typedef unsigned long u32;
 #define OLED_CMD  0	//写命令
 #define OLED_DATA 1	//写数据
 
-extern  u16 BACK_COLOR;   //背景色
-extern unsigned char image[12800];
+extern  u16 BACK_COLOR;                 //Background color is global
+extern unsigned char image[12800];      //Buffer memory
 
 void LCD_Writ_Bus(u8 dat);
 void LCD_WR_DATA8(u8 dat);
@@ -91,7 +93,7 @@ void LCD_WR_REG(u8 dat);
 void LCD_Address_Set(u16 x1,u16 y1,u16 x2,u16 y2);
 void Lcd_Init(void);
 void LCD_Clear(u16 Color);
-void LCD_ShowChinese(u16 x,u16 y,u8 index,u8 size,u16 color);
+// void LCD_ShowChinese(u16 x,u16 y,u8 index,u8 size,u16 color); Sorry!
 void LCD_DrawPoint(u16 x,u16 y,u16 color);
 void LCD_DrawPoint_big(u16 x,u16 y,u16 color);
 void LCD_Fill(u16 xsta,u16 ysta,u16 xend,u16 yend,u16 color);
@@ -106,8 +108,31 @@ void LCD_ShowNum1(u16 x,u16 y,float num,u8 len,u16 color);
 void LCD_ShowPicture(u16 x1,u16 y1,u16 x2,u16 y2);
 void LCD_ShowLogo(void);
 
+// added functions
+void LCD_drawBitmap(u16 *b, u8 x1, u8 y1, u8 Width, u8 Height);
+void LCD_ShowStringX(u16 x,u16 y,const u8 *p,u16 color, u8 fontsize);
+void LCD_ShowNumX(u16 x,u16 y,u16 num,u8 len,u16 color, u8 fontsize);
+void LCD_ShowNum1X(u16 x,u16 y,float num,u8 len,u16 color,u8 fontsize);
 
-//画笔颜色
+void LCD_printChar(u16 x,u16 y,u8 c,u16 color,u8 fontsize);
+u16 dampenColor(u16 color);
+
+// Buffer for scale2x, scale3x and printChar routines
+#define X_BUF 24
+#define Y_BUF 48
+// Modularized Scale2x, Scale3x, Scale4x routines
+// DangerMouse says: Open-pointered routines, use with extreme prejudice
+void scale2x(u16 b[X_BUF][Y_BUF], u8 x, u8 y);
+void scale3x(u16 b[X_BUF][Y_BUF], u8 x, u8 y); 
+
+// font sizes
+#define SMALL   0
+#define MEDIUM  1
+#define LARGE   2
+#define X2      1
+#define X3      2
+
+//16-bit color constants
 #define WHITE         	 0xFFFF
 #define BLACK         	 0x0000	  
 #define BLUE           	 0x001F  
@@ -119,17 +144,18 @@ void LCD_ShowLogo(void);
 #define GREEN         	 0x07E0
 #define CYAN          	 0x7FFF
 #define YELLOW        	 0xFFE0
-#define BROWN 			 0XBC40 //棕色
-#define BRRED 			 0XFC07 //棕红色
-#define GRAY  			 0X8430 //灰色
-//GUI颜色
+#define BROWN 			 0XBC40 
+#define BRRED 			 0XFC07 
+#define GRAY  			 0X8430 
+//GUI color
 
-#define DARKBLUE      	 0X01CF	//深蓝色
-#define LIGHTBLUE      	 0X7D7C	//浅蓝色  
-#define GRAYBLUE       	 0X5458 //灰蓝色
-//以上三色为PANEL的颜色 
- 
-#define LIGHTGREEN     	 0X841F //浅绿色
+//Panel colors
+#define DARKBLUE      	 0X01CF	
+#define LIGHTBLUE      	 0X7D7C	 
+#define GRAYBLUE       	 0X5458 
+
+//  
+#define LIGHTGREEN     	 0X841F 
 #define LGRAY 			     0XC618 //浅灰色(PANNEL),窗体背景色
 
 #define LGRAYBLUE        0XA651 //浅灰蓝色(中间层颜色)
@@ -138,8 +164,3 @@ void LCD_ShowLogo(void);
 
 					  		 
 #endif  
-	 
-	 
-
-
-
