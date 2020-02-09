@@ -7,6 +7,10 @@ simple-but-fast [scale2x and scale3x](https://scale2x.it) algorithm.
 
 Very alpha, just to get the hang of it. 
 
+![Sipeed Longan Nano displaying characters]
+
+[nano-image-1]: http://www.untergeek.de/wp-content/uploads/2020/02/20-02-09-12-53-18-4921-scaled-e1581249450940.jpg
+
 Just start PlatformIO, create an empty Longan Nano project with the GD32... framework, and put the 
 contents of the GD32V_LCD folder into the project. It should compile fine then. 
 
